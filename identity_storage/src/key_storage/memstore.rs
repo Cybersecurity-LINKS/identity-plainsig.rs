@@ -420,6 +420,71 @@ mod bbs_plus_impl {
     }
   }
 }
+
+pub(crate) mod extra2 {
+
+  use async_trait::async_trait;
+  use identity_verification::jws::JwsAlgorithm;
+  use crate::JwkStorage;
+  use crate::KeyType;
+  use crate::KeyStorageResult;
+  use crate::JwkGenOutput;
+  use crate::JwkMemStore;
+  use crate::KeyStorageError;
+  use crate::KeyStorageErrorKind;
+  use crate::KeyId;
+  use identity_verification::jwk::Jwk;
+  use crate::key_storage::ed25519::encode_jwk;
+  use crypto::signatures::ed25519::SecretKey;
+  use tokio::sync::RwLockWriteGuard;
+  use crate::key_storage::memstore::MemStoreKeyType;
+  use crate::key_storage::memstore::check_key_alg_compatibility;
+  use crate::key_storage::memstore::random_key_id;
+  use crate::key_storage::memstore::JwkKeyStore;
+
+  /// Secure storage for cryptographic keys represented as JWKs.
+  #[cfg_attr(not(feature = "send-sync-storage"), async_trait(?Send))]
+  #[cfg_attr(feature = "send-sync-storage", async_trait)]
+  pub trait JwkStorageWithPrivateKey : JwkStorage {
+      /// Generate a new key (including the private key) represented as a JSON Web Key.
+      ///
+      /// It is recommended that the implementer exposes constants for the supported [`KeyType`].
+      async fn generate_with_private_key(&self, key_type: KeyType, alg: JwsAlgorithm) -> KeyStorageResult<JwkGenOutput>;
+  }
+
+  #[cfg_attr(not(feature = "send-sync-storage"), async_trait(?Send))]
+  #[cfg_attr(feature = "send-sync-storage", async_trait)]
+  impl JwkStorageWithPrivateKey for JwkMemStore {
+      async fn generate_with_private_key(&self, key_type: KeyType, alg: JwsAlgorithm) -> KeyStorageResult<JwkGenOutput> {
+          let key_type: MemStoreKeyType = MemStoreKeyType::try_from(&key_type)?;
+      
+          check_key_alg_compatibility(key_type, alg)?;
+      
+          let (private_key, public_key) = match key_type {
+            MemStoreKeyType::Ed25519 => {
+              let private_key = SecretKey::generate()
+                .map_err(|err| KeyStorageError::new(KeyStorageErrorKind::RetryableIOFailure).with_source(err))?;
+              let public_key = private_key.public_key();
+              (private_key, public_key)
+            },
+              MemStoreKeyType::BLS12381G2 => todo!()
+          };
+      
+          let kid: KeyId = random_key_id();
+      
+          let mut jwk: Jwk = encode_jwk(&private_key, &public_key);
+          jwk.set_alg(alg.name());
+          jwk.set_kid(jwk.thumbprint_sha256_b64());
+          //let public_jwk: Jwk = jwk.to_public().expect("should only panic if kty == oct");
+      
+          let mut jwk_store: RwLockWriteGuard<'_, JwkKeyStore> = self.jwk_store.write().await;
+          jwk_store.insert(kid.clone(), jwk.clone());
+      
+          Ok(JwkGenOutput::new(kid, jwk))
+      }
+  }
+}
+
 pub(crate) mod shared {
   use core::fmt::Debug;
   use core::fmt::Formatter;

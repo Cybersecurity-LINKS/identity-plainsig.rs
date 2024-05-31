@@ -7,6 +7,8 @@
 
 pub use self::builder::DocumentBuilder;
 pub use self::core_document::CoreDocument;
+pub use self::extra::*;
 
 mod builder;
 mod core_document;
+mod extra;

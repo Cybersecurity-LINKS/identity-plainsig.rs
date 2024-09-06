@@ -3,7 +3,7 @@ use identity_document::document::CoreDocument;
 use identity_iota_core::IotaDocument;
 use async_trait::async_trait;
 use identity_verification::{jwk::Jwk, jws::JwsAlgorithm, MethodScope};
-use crate::ed25519::expand_secret_jwk;
+use crate::key_storage::ed25519::expand_secret_jwk;
 use crate::{JwkStorage, JwsSignatureOptions, KeyId, KeyIdStorage, KeyType, Storage, StorageResult};
 use crate::key_storage::JwkGenOutput;
 use identity_verification::VerificationMethod;
